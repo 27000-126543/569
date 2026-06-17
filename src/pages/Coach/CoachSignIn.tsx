@@ -50,10 +50,14 @@ export default function CoachSignIn() {
     try {
       const response = await api.get<any>(`/coaches/${coach?.id}/students`);
       if (response.success) {
-        setStudents(response.students || []);
+        const newStudents = response.students || [];
+        setStudents(newStudents);
+        return newStudents;
       }
+      return [];
     } catch (error) {
       console.error('Fetch students error:', error);
+      return [];
     }
   };
 
@@ -66,9 +70,12 @@ export default function CoachSignIn() {
           (r: TrainingRecord) => r.trainingDate === today
         );
         setTodayRecords(todayList);
+        return todayList;
       }
+      return [];
     } catch (error) {
       console.error('Fetch records error:', error);
+      return [];
     }
   };
 
@@ -188,12 +195,12 @@ export default function CoachSignIn() {
         setStudentSearch('');
         setShowHoursChange(true);
         
-        await Promise.all([fetchStudents(), fetchTodayRecords()]);
-        
-        const updatedStudent = students.find(s => s.id === selectedStudent.id);
-        if (updatedStudent) {
-          setSelectedStudent(updatedStudent);
-        }
+        await Promise.all([fetchStudents(), fetchTodayRecords()]).then(([newStudents]) => {
+          const updatedStudent = newStudents.find(s => s.id === selectedStudent.id);
+          if (updatedStudent) {
+            setSelectedStudent(updatedStudent);
+          }
+        });
         
         setTimeout(() => setShowHoursChange(false), 8000);
       }

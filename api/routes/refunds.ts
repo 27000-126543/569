@@ -241,6 +241,7 @@ router.put('/:id/reject', async (req: Request, res: Response): Promise<void> => 
         content: `很遗憾，您的退费申请被拒绝，拒绝原因：${rejectReason || '不符合退费条件'}。`,
         relatedId: request.id,
         relatedType: 'refund_result',
+        hasAttachment: true,
       });
     }
 
