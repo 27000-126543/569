@@ -188,6 +188,10 @@ router.put('/appointments/:id', async (req: Request, res: Response): Promise<voi
       appointment.score = score;
     }
 
+    if (status === 'cancelled' && req.body.rejectReason) {
+      appointment.rejectReason = req.body.rejectReason;
+    }
+
     const studentUser = db.users.find(u => {
       const s = db.findStudentById(appointment.studentId);
       return s?.userId === u.id;
@@ -215,8 +219,13 @@ router.put('/appointments/:id', async (req: Request, res: Response): Promise<voi
         title = '考试未通过通知';
         content = `很遗憾，您的${appointment.subjectName}考试未通过，成绩：${score}分。请加强练习后再次预约。`;
       } else if (status === 'cancelled') {
-        title = '考试预约已取消';
-        content = `您的${appointment.subjectName}考试预约已取消。`;
+        const rejectReason = req.body.rejectReason || '';
+        title = '考试预约被拒绝';
+        if (rejectReason) {
+          content = `您的${appointment.subjectName}考试预约已被拒绝取消。拒绝原因：${rejectReason}`;
+        } else {
+          content = `您的${appointment.subjectName}考试预约已取消。`;
+        }
       }
 
       if (title && content) {

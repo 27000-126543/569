@@ -67,12 +67,14 @@ router.get('/:id/voucher', async (req: Request, res: Response): Promise<void> =>
         const student = appointment ? db.findStudentById(appointment.studentId) : null;
         const studentUser = student ? db.users.find(u => u.id === student.userId) : null;
 
-        fileName = `考试准考证_${user?.name || '学员'}.txt`;
+        const isCancelled = appointment?.status === 'cancelled';
+        fileName = `${isCancelled ? '考试预约取消凭证' : '考试准考证'}_${studentUser?.name || user?.name || '学员'}.txt`;
         content = `
 ========================================
-          考试准考证
+      ${isCancelled ? '考试预约取消凭证' : '考试准考证'}
 ========================================
 
+预约编号：${appointment?.id || '---'}
 准考证号：${appointment?.ticketNumber || '---'}
 学员姓名：${studentUser?.name || '---'}
 学员身份证：${student?.id || '---'}
@@ -82,22 +84,24 @@ router.get('/:id/voucher', async (req: Request, res: Response): Promise<void> =>
 考试时间：${appointment?.examTime || '---'}
 考试场地：${appointment?.examRoomName || '---'}
 
-考试状态：${
+预约状态：${
   appointment?.status === 'pending' ? '待审核' :
   appointment?.status === 'confirmed' ? '已确认' :
   appointment?.status === 'passed' ? '已通过' :
   appointment?.status === 'failed' ? '未通过' :
   appointment?.status === 'cancelled' ? '已取消' : '---'
 }
+${appointment?.rejectReason ? `拒绝原因：${appointment.rejectReason}` : ''}
 ${appointment?.score !== undefined ? `考试成绩：${appointment.score} 分` : ''}
 
-注意事项：
+${isCancelled ? '' : `注意事项：
   1. 请携带身份证原件准时参加考试
   2. 考试前30分钟到达考场签到
   3. 遵守考场纪律，服从监考人员安排
   4. 考试结束后凭准考证领取成绩单
+`}
 
-凭证编号：${appointment?.id || '---'}
+凭证编号：${appointment?.id || message.id}
 生成时间：${new Date().toLocaleString('zh-CN')}
 
 ========================================
@@ -107,12 +111,14 @@ ${appointment?.score !== undefined ? `考试成绩：${appointment.score} 分` :
         break;
       }
 
-      case 'refund': {
+      case 'refund':
+      case 'refund_request':
+      case 'refund_result': {
         const refund = db.refundRequests.find(r => r.id === message.relatedId);
         const student = refund ? db.findStudentById(refund.studentId) : null;
         const studentUser = student ? db.users.find(u => u.id === student.userId) : null;
 
-        fileName = `退费凭证_${user?.name || '学员'}.txt`;
+        fileName = `退费审批凭证_${studentUser?.name || user?.name || '学员'}.txt`;
         content = `
 ========================================
           退费审批凭证
@@ -128,18 +134,19 @@ ${appointment?.score !== undefined ? `考试成绩：${appointment.score} 分` :
 学时完成比例：${refund ? Math.round((refund.completedHours / refund.totalHours) * 100) : 0}%
 
 申请退费金额：¥${refund?.refundAmount?.toLocaleString() || '---'}
-申请时间：${refund?.createdAt || '---'}
+申请时间：${refund?.createdAt ? new Date(refund.createdAt).toLocaleString('zh-CN') : '---'}
 退费原因：${refund?.reason || '---'}
 
-审批状态：${
+审批结果：${
   refund?.status === 'pending' ? '待审批' :
   refund?.status === 'approved' ? '已通过' :
   refund?.status === 'rejected' ? '已拒绝' : '---'
 }
-${refund?.rejectReason ? `拒绝原因：${refund.rejectReason}` : ''}
-${refund?.approvedAt ? `审批时间：${refund.approvedAt}` : ''}
+${refund?.status === 'approved' ? `退款金额：¥${refund.refundAmount?.toLocaleString()}` : ''}
+${refund?.approvedAt ? `审批时间：${new Date(refund.approvedAt).toLocaleString('zh-CN')}` : ''}
+${refund?.status === 'rejected' && refund.rejectReason ? `拒绝原因：${refund.rejectReason}` : ''}
 
-凭证编号：${refund?.id || '---'}
+凭证编号：${refund?.id || message.id}
 生成时间：${new Date().toLocaleString('zh-CN')}
 
 ========================================

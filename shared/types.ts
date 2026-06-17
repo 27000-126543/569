@@ -92,6 +92,7 @@ export interface ExamAppointment {
   status: 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'passed' | 'failed';
   ticketNumber: string;
   score?: number;
+  rejectReason?: string;
   createdAt: string;
 }
 
