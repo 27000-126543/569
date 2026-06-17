@@ -46,6 +46,7 @@ router.post('/signin', async (req: Request, res: Response): Promise<void> => {
         content: `您已完成${subjectName}签到，培训开始时间：${now}，请认真学习。`,
         relatedId: newRecord.id,
         relatedType: 'training_record',
+        hasAttachment: true,
       });
     }
 
@@ -126,6 +127,41 @@ router.post('/signout', async (req: Request, res: Response): Promise<void> => {
     res.status(500).json({
       success: false,
       message: '签退失败',
+    });
+  }
+});
+
+router.get('/records/:recordId', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { recordId } = req.params;
+    const record = db.trainingRecords.find(r => r.id === recordId);
+
+    if (!record) {
+      res.status(404).json({
+        success: false,
+        message: '培训记录不存在',
+      });
+      return;
+    }
+
+    const coach = record.coachId ? db.findCoachById(record.coachId) : null;
+    const coachUser = coach ? db.users.find(u => u.id === coach.userId) : null;
+    const student = db.findStudentById(record.studentId);
+    const studentUser = student ? db.users.find(u => u.id === student.userId) : null;
+
+    res.json({
+      success: true,
+      record: {
+        ...record,
+        coachName: coachUser?.name || '---',
+        studentName: studentUser?.name || '---',
+      },
+    });
+  } catch (error) {
+    console.error('Get training record error:', error);
+    res.status(500).json({
+      success: false,
+      message: '获取培训记录失败',
     });
   }
 });

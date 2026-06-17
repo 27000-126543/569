@@ -34,6 +34,9 @@ export default function CoachSignIn() {
   const [studentSearch, setStudentSearch] = useState('');
   const [hoursBefore, setHoursBefore] = useState<number | null>(null);
   const [subjectHoursBefore, setSubjectHoursBefore] = useState<number | null>(null);
+  const [completedRecord, setCompletedRecord] = useState<TrainingRecord | null>(null);
+  const [showHoursChange, setShowHoursChange] = useState(false);
+  const [completedSubject, setCompletedSubject] = useState<string>('');
 
   useEffect(() => {
     if (coach) {
@@ -164,9 +167,12 @@ export default function CoachSignIn() {
   const handleSignOut = async () => {
     if (!currentRecord || !selectedStudent) return;
 
+    const recordSubject = currentRecord.subject;
+    const recordHours = currentRecord.hours;
     setHoursBefore(selectedStudent.completedHours);
-    const subj = selectedStudent.subjects.find(s => s.subject === currentRecord.subject);
+    const subj = selectedStudent.subjects.find(s => s.subject === recordSubject);
     setSubjectHoursBefore(subj?.completedHours ?? null);
+    setCompletedSubject(recordSubject);
 
     setIsLoading(true);
     try {
@@ -175,14 +181,21 @@ export default function CoachSignIn() {
       });
 
       if (response.success) {
+        setCompletedRecord(response.record);
         setCurrentRecord(null);
-        setSelectedStudent(null);
         setSelectedSubject('');
         setStudentCode('');
         setStudentSearch('');
-        fetchStudents();
-        fetchTodayRecords();
-        alert('签退成功！学时已更新。');
+        setShowHoursChange(true);
+        
+        await Promise.all([fetchStudents(), fetchTodayRecords()]);
+        
+        const updatedStudent = students.find(s => s.id === selectedStudent.id);
+        if (updatedStudent) {
+          setSelectedStudent(updatedStudent);
+        }
+        
+        setTimeout(() => setShowHoursChange(false), 8000);
       }
     } catch (error) {
       console.error('Sign out error:', error);
@@ -232,9 +245,97 @@ export default function CoachSignIn() {
     return (s as any)?.name || '学员';
   };
 
+  const subjectHoursAfter = completedSubject && selectedStudent
+    ? selectedStudent.subjects.find(s => s.subject === completedSubject)?.completedHours
+    : null;
+
   return (
     <Layout role="coach" title="扫码签到">
       <div className="max-w-2xl mx-auto space-y-6">
+        {showHoursChange && completedRecord && selectedStudent && (
+          <div className="bg-gradient-to-r from-emerald-50 to-blue-50 border border-emerald-200 rounded-xl overflow-hidden animate-fade-in">
+            <div className="bg-emerald-600 px-6 py-3">
+              <h3 className="text-white font-semibold flex items-center gap-2">
+                <CheckCircle className="w-5 h-5" />
+                签退成功！学时已更新
+              </h3>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="bg-white rounded-lg p-4 border border-emerald-100">
+                <p className="text-sm text-slate-500 mb-2">学员</p>
+                <p className="text-lg font-bold text-slate-800">
+                  {(selectedStudent as any).name || '学员'}
+                </p>
+                <p className="text-xs text-slate-400">{selectedStudent.id}</p>
+              </div>
+              <div className="bg-white rounded-lg p-4 border border-emerald-100">
+                <p className="text-sm text-slate-500 mb-2">培训科目</p>
+                <p className="text-lg font-bold text-slate-800">
+                  {completedRecord.subjectName || getSubjectName(completedRecord.subject)}
+                </p>
+                <p className="text-xs text-slate-400">
+                  {completedRecord.signInTime} - {completedRecord.signOutTime}
+                </p>
+              </div>
+              <div className="bg-white rounded-lg p-4 border border-emerald-100">
+                <p className="text-sm text-slate-500 mb-2">总学时</p>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-bold text-emerald-600">
+                    {selectedStudent.completedHours}h
+                  </span>
+                  {hoursBefore !== null && (
+                    <span className="text-sm text-emerald-500">
+                      (↑ +{selectedStudent.completedHours - hoursBefore}h)
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-400">
+                  {selectedStudent.completedHours}/{selectedStudent.totalHours}h
+                </p>
+              </div>
+              <div className="bg-white rounded-lg p-4 border border-emerald-100">
+                <p className="text-sm text-slate-500 mb-2">
+                  {completedRecord.subjectName || getSubjectName(completedRecord.subject)} 已完成
+                </p>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-bold text-blue-600">
+                    {subjectHoursAfter}h
+                  </span>
+                  {subjectHoursBefore !== null && subjectHoursAfter !== null && (
+                    <span className="text-sm text-blue-500">
+                      (↑ +{(subjectHoursAfter || 0) - (subjectHoursBefore || 0)}h)
+                    </span>
+                  )}
+                </div>
+                {(() => {
+                  const subj = selectedStudent.subjects.find(s => s.subject === completedSubject);
+                  return subj ? (
+                    <p className="text-xs text-slate-400">
+                      {subj.completedHours}/{subj.requiredHours}h
+                    </p>
+                  ) : null;
+                })()}
+              </div>
+            </div>
+              {(() => {
+                const subj = selectedStudent.subjects.find(s => s.subject === completedSubject);
+                if (subj && subj.completedHours >= subj.requiredHours) {
+                  return (
+                    <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                      <p className="text-sm font-medium text-amber-800 flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4" />
+                        恭喜！{subj.subjectName}学时已达标，可以预约考试了！
+                      </p>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+            </div>
+          </div>
+        )}
+
         {currentRecord ? (
           <div className="bg-white rounded-xl border border-amber-200 overflow-hidden">
             <div className="bg-amber-50 border-b border-amber-200 px-6 py-4">

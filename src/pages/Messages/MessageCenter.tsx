@@ -10,8 +10,15 @@ import {
   CheckCheck,
   Download,
   X,
+  FileCheck,
+  CalendarCheck,
+  UserPlus,
+  Clock,
+  TrendingUp,
+  AlertCircle,
 } from 'lucide-react';
 import { useMessageStore, useAuthStore } from '../../store/useStore';
+import api from '../../utils/api';
 import type { Message, MessageType } from '../../../shared/types';
 
 const messageTypes: { value: MessageType | 'all'; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -57,11 +64,89 @@ const getTypeColor = (type: MessageType) => {
   }
 };
 
+const getVoucherInfo = (relatedType?: string) => {
+  switch (relatedType) {
+    case 'registration':
+      return {
+        name: '报名凭证',
+        icon: UserPlus,
+        color: 'bg-blue-100 text-blue-600',
+      };
+    case 'exam_appointment':
+    case 'exam_result':
+      return {
+        name: '考试凭证',
+        icon: CalendarCheck,
+        color: 'bg-emerald-100 text-emerald-600',
+      };
+    case 'refund':
+    case 'refund_request':
+    case 'refund_result':
+      return {
+        name: '退费审批凭证',
+        icon: Wallet,
+        color: 'bg-amber-100 text-amber-600',
+      };
+    case 'training_record':
+      return {
+        name: '培训学时凭证',
+        icon: GraduationCap,
+        color: 'bg-purple-100 text-purple-600',
+      };
+    case 'daily_report':
+      return {
+        name: '运营日报凭证',
+        icon: FileCheck,
+        color: 'bg-indigo-100 text-indigo-600',
+      };
+    default:
+      return {
+        name: '消息通知',
+        icon: FileText,
+        color: 'bg-slate-100 text-slate-600',
+      };
+  }
+};
+
+const getStatusText = (relatedType: string | undefined, data: any) => {
+  if (!data) return '---';
+  
+  switch (relatedType) {
+    case 'exam_appointment':
+    case 'exam_result':
+      switch (data.status) {
+        case 'pending': return '待审核';
+        case 'confirmed': return '已确认';
+        case 'passed': return '已通过';
+        case 'failed': return '未通过';
+        case 'cancelled': return '已取消';
+        default: return '---';
+      }
+    case 'refund':
+    case 'refund_request':
+    case 'refund_result':
+      switch (data.status) {
+        case 'pending': return '待审批';
+        case 'approved': return '已通过';
+        case 'rejected': return '已拒绝';
+        default: return '---';
+      }
+    case 'training_record':
+      return data.status === 'in_progress' ? '进行中' : '已完成';
+    case 'registration':
+      return '已报名';
+    default:
+      return '---';
+  }
+};
+
 export default function MessageCenter({ role }: { role: string }) {
   const { user } = useAuthStore();
   const { messages, unreadCount, isLoading, fetchMessages, markAsRead, markAllAsRead } = useMessageStore();
   const [activeType, setActiveType] = useState<MessageType | 'all'>('all');
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
+  const [relatedData, setRelatedData] = useState<any>(null);
+  const [loadingRelated, setLoadingRelated] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -69,11 +154,64 @@ export default function MessageCenter({ role }: { role: string }) {
     }
   }, [user, activeType, fetchMessages]);
 
+  const fetchRelatedData = async (message: Message) => {
+    if (!message.relatedType || !message.relatedId) {
+      setRelatedData(null);
+      return;
+    }
+
+    setLoadingRelated(true);
+    try {
+      let data = null;
+      
+      switch (message.relatedType) {
+        case 'exam_appointment':
+        case 'exam_result': {
+          const resp = await api.get<any>('/exam/appointments');
+          if (resp.success) {
+            data = resp.appointments?.find((a: any) => a.id === message.relatedId);
+          }
+          break;
+        }
+        case 'refund':
+        case 'refund_request':
+        case 'refund_result': {
+          const resp = await api.get<any>('/refunds');
+          if (resp.success) {
+            data = resp.requests?.find((r: any) => r.id === message.relatedId);
+          }
+          break;
+        }
+        case 'training_record': {
+          try {
+            const resp = await api.get<any>(`/training/records/${message.relatedId}`);
+            if (resp.success) {
+              data = resp.record;
+            }
+          } catch (e) {
+            console.error('Fetch training record error:', e);
+          }
+          break;
+        }
+        default:
+          data = null;
+      }
+      
+      setRelatedData(data);
+    } catch (error) {
+      console.error('Fetch related data error:', error);
+      setRelatedData(null);
+    } finally {
+      setLoadingRelated(false);
+    }
+  };
+
   const handleMessageClick = (message: Message) => {
     setSelectedMessage(message);
     if (!message.isRead) {
       markAsRead(message.id);
     }
+    fetchRelatedData(message);
   };
 
   const handleMarkAllRead = () => {
@@ -222,7 +360,10 @@ export default function MessageCenter({ role }: { role: string }) {
             <div className="p-4 border-b border-slate-100 flex items-center justify-between">
               <h3 className="font-semibold text-slate-800">消息详情</h3>
               <button
-                onClick={() => setSelectedMessage(null)}
+                onClick={() => {
+                  setSelectedMessage(null);
+                  setRelatedData(null);
+                }}
                 className="p-1 hover:bg-slate-100 rounded"
               >
                 <X className="w-5 h-5 text-slate-400" />
@@ -247,22 +388,122 @@ export default function MessageCenter({ role }: { role: string }) {
                 </div>
               </div>
 
-              <div className="bg-slate-50 rounded-lg p-4">
+              <div className="bg-slate-50 rounded-lg p-4 mb-4">
                 <p className="text-slate-700 leading-relaxed">
                   {selectedMessage.content}
                 </p>
               </div>
 
-              {selectedMessage.hasAttachment && (
-                <div className="mt-4">
-                  <p className="text-sm text-slate-500 mb-2">附件凭证</p>
-                  <button
-                    onClick={() => handleDownloadVoucher(selectedMessage.id)}
-                    className="w-full py-3 border border-blue-200 text-blue-600 rounded-lg hover:bg-blue-50 flex items-center justify-center gap-2 transition-colors"
-                  >
-                    <Download className="w-4 h-4" />
-                    下载凭证
-                  </button>
+              {(selectedMessage.relatedType || selectedMessage.hasAttachment) && (
+                <div className="border border-slate-200 rounded-xl p-4">
+                  <h5 className="font-medium text-slate-800 mb-3 flex items-center gap-2">
+                    <FileCheck className="w-4 h-4 text-blue-600" />
+                    凭证信息
+                  </h5>
+
+                  <div className="space-y-3 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">凭证类型</span>
+                      <div className="flex items-center gap-1.5">
+                        {(() => {
+                          const voucherInfo = getVoucherInfo(selectedMessage.relatedType);
+                          const VoucherIcon = voucherInfo.icon;
+                          return (
+                            <>
+                              <span className={`p-1 rounded ${voucherInfo.color}`}>
+                                <VoucherIcon className="w-3 h-3" />
+                              </span>
+                              <span className="font-medium text-slate-800">
+                                {voucherInfo.name}
+                              </span>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </div>
+
+                    {selectedMessage.relatedId && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-500">关联编号</span>
+                        <span className="font-mono text-slate-800 text-xs">
+                          {selectedMessage.relatedId}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">当前状态</span>
+                      {loadingRelated ? (
+                        <span className="text-slate-400 text-xs">加载中...</span>
+                      ) : (
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          (() => {
+                            const status = getStatusText(selectedMessage.relatedType, relatedData);
+                            if (status === '已取消' || status === '已拒绝' || status === '未通过') {
+                              return 'bg-rose-100 text-rose-700';
+                            }
+                            if (status === '已通过' || status === '已完成' || status === '已确认' || status === '已报名') {
+                              return 'bg-emerald-100 text-emerald-700';
+                            }
+                            if (status === '进行中') {
+                              return 'bg-amber-100 text-amber-700';
+                            }
+                            return 'bg-slate-100 text-slate-700';
+                          })()
+                        }`}>
+                          {getStatusText(selectedMessage.relatedType, relatedData)}
+                        </span>
+                      )}
+                    </div>
+
+                    {relatedData?.rejectReason && (
+                      <div className="pt-2 border-t border-slate-100">
+                        <span className="text-slate-500 block mb-1">拒绝原因</span>
+                        <p className="text-rose-600 text-xs bg-rose-50 p-2 rounded">
+                          {relatedData.rejectReason}
+                        </p>
+                      </div>
+                    )}
+
+                    {relatedData?.refundAmount && (
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                        <span className="text-slate-500">退款金额</span>
+                        <span className="font-semibold text-amber-600">
+                          ¥{relatedData.refundAmount.toLocaleString()}
+                        </span>
+                      </div>
+                    )}
+
+                    {relatedData?.hours && (
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                        <span className="text-slate-500">本次学时</span>
+                        <span className="font-semibold text-purple-600">
+                          {relatedData.hours} 学时
+                        </span>
+                      </div>
+                    )}
+
+                    {relatedData?.examDate && (
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                        <span className="text-slate-500">考试时间</span>
+                        <span className="font-medium text-slate-800">
+                          {relatedData.examDate} {relatedData.examTime}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {selectedMessage.hasAttachment && (
+                    <div className="mt-4 pt-4 border-t border-slate-100">
+                      <button
+                        onClick={() => handleDownloadVoucher(selectedMessage.id)}
+                        className="w-full py-3 border border-blue-200 text-blue-600 rounded-lg hover:bg-blue-50 flex items-center justify-center gap-2 transition-colors text-sm font-medium"
+                      >
+                        <Download className="w-4 h-4" />
+                        下载凭证
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

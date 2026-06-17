@@ -10,6 +10,7 @@ import {
   CheckCircle,
   XCircle,
   Search,
+  X,
 } from 'lucide-react';
 import api from '../../utils/api';
 import type { ExamAppointment, ExamRoom } from '../../../shared/types';
@@ -18,6 +19,10 @@ export default function ExamDashboard() {
   const [rooms, setRooms] = useState<ExamRoom[]>([]);
   const [appointments, setAppointments] = useState<ExamAppointment[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState<ExamAppointment | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     fetchRooms();
@@ -59,16 +64,32 @@ export default function ExamDashboard() {
     }
   };
 
-  const handleReject = async (id: string) => {
+  const handleReject = (appointment: ExamAppointment) => {
+    setSelectedAppointment(appointment);
+    setRejectReason('');
+    setRejectModalOpen(true);
+  };
+
+  const handleRejectConfirm = async () => {
+    if (!selectedAppointment || !rejectReason.trim()) return;
+
+    setIsLoading(true);
     try {
-      const response = await api.put<any>(`/exam/appointments/${id}`, {
+      const response = await api.put<any>(`/exam/appointments/${selectedAppointment.id}`, {
         status: 'cancelled',
+        rejectReason: rejectReason.trim(),
       });
       if (response.success) {
+        setRejectModalOpen(false);
+        setSelectedAppointment(null);
+        setRejectReason('');
         fetchAppointments();
       }
     } catch (error) {
       console.error('Reject appointment error:', error);
+      alert('操作失败，请重试');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -216,7 +237,7 @@ export default function ExamDashboard() {
                           通过
                         </button>
                         <button
-                          onClick={() => handleReject(appointment.id)}
+                          onClick={() => handleReject(appointment)}
                           className="flex-1 py-2 bg-rose-100 text-rose-600 text-sm rounded-lg hover:bg-rose-200 flex items-center justify-center gap-1"
                         >
                           <XCircle className="w-4 h-4" />
@@ -235,6 +256,72 @@ export default function ExamDashboard() {
           </div>
         </div>
       </div>
+
+      {rejectModalOpen && selectedAppointment && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full mx-4 animate-fade-in">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xl font-bold text-slate-800">拒绝考试预约</h3>
+              <button
+                onClick={() => {
+                  setRejectModalOpen(false);
+                  setSelectedAppointment(null);
+                  setRejectReason('');
+                }}
+                className="p-1 hover:bg-slate-100 rounded"
+              >
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+            <p className="text-slate-600 mb-4">
+              学员 <strong>{selectedAppointment.studentName}</strong> 的{' '}
+              <strong>{selectedAppointment.subjectName}</strong> 考试预约
+            </p>
+            <p className="text-sm text-slate-500 mb-2">
+              考试时间：{selectedAppointment.examDate} {selectedAppointment.examTime}
+            </p>
+            <p className="text-sm text-slate-500 mb-4">
+              考试场地：{selectedAppointment.examRoomName}
+            </p>
+            <p className="text-sm text-slate-500 mb-3">
+              请填写拒绝原因（系统将通知学员）：
+            </p>
+            <textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="请输入拒绝原因..."
+              rows={4}
+              className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent resize-none"
+            />
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setRejectModalOpen(false);
+                  setSelectedAppointment(null);
+                  setRejectReason('');
+                }}
+                className="flex-1 py-3 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleRejectConfirm}
+                disabled={!rejectReason.trim() || isLoading}
+                className="flex-1 py-3 bg-rose-600 text-white rounded-lg hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isLoading ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    处理中...
+                  </>
+                ) : (
+                  '确认拒绝'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }
