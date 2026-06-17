@@ -82,6 +82,16 @@ export default function MessageCenter({ role }: { role: string }) {
     }
   };
 
+  const handleDownloadVoucher = (messageId: string) => {
+    const link = document.createElement('a');
+    link.href = `/api/messages/${messageId}/voucher`;
+    link.download = '';
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const messagePagePath = {
     student: '/student/messages',
     coach: '/coach/messages',
@@ -246,7 +256,10 @@ export default function MessageCenter({ role }: { role: string }) {
               {selectedMessage.hasAttachment && (
                 <div className="mt-4">
                   <p className="text-sm text-slate-500 mb-2">附件凭证</p>
-                  <button className="w-full py-3 border border-blue-200 text-blue-600 rounded-lg hover:bg-blue-50 flex items-center justify-center gap-2 transition-colors">
+                  <button
+                    onClick={() => handleDownloadVoucher(selectedMessage.id)}
+                    className="w-full py-3 border border-blue-200 text-blue-600 rounded-lg hover:bg-blue-50 flex items-center justify-center gap-2 transition-colors"
+                  >
                     <Download className="w-4 h-4" />
                     下载凭证
                   </button>

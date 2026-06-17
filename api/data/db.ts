@@ -149,6 +149,99 @@ class Database {
     const refundRatio = Math.max(0, 1 - hoursUsedRatio * 1.2);
     return Math.round(student.totalFee * refundRatio);
   }
+
+  generateTrainingPlans(
+    studentId: string,
+    studentName: string,
+    coachId: string,
+    availableSlots: string[],
+    coachAvailableSlots: string[]
+  ): TrainingPlan[] {
+    const plans: TrainingPlan[] = [];
+    const overlapSlots = availableSlots.filter(slot => coachAvailableSlots.includes(slot));
+
+    if (overlapSlots.length === 0) {
+      return plans;
+    }
+
+    const dayMap: Record<string, string> = {
+      '周一': 'Monday',
+      '周二': 'Tuesday',
+      '周三': 'Wednesday',
+      '周四': 'Thursday',
+      '周五': 'Friday',
+      '周六': 'Saturday',
+      '周日': 'Sunday',
+    };
+
+    const timeMap: Record<string, { start: string; end: string }> = {
+      '上午': { start: '09:00', end: '11:00' },
+      '下午': { start: '14:00', end: '16:00' },
+      '晚上': { start: '18:00', end: '20:00' },
+    };
+
+    const getNextDate = (dayName: string, weekOffset: number): string => {
+      const today = new Date();
+      const dayIndex: Record<string, number> = {
+        'Monday': 1, 'Tuesday': 2, 'Wednesday': 3, 'Thursday': 4,
+        'Friday': 5, 'Saturday': 6, 'Sunday': 0,
+      };
+      const targetDay = dayIndex[dayName] || 1;
+      const currentDay = today.getDay();
+      let daysUntil = targetDay - currentDay + weekOffset * 7;
+      if (daysUntil <= 0) daysUntil += 7;
+      const nextDate = new Date(today);
+      nextDate.setDate(today.getDate() + daysUntil);
+      return nextDate.toISOString().split('T')[0];
+    };
+
+    const subjects = [
+      { key: 'subject-2', name: '科目二' },
+      { key: 'subject-3', name: '科目三' },
+    ];
+
+    let planCount = 0;
+    const maxPlans = 6;
+
+    for (let week = 0; week < 3 && planCount < maxPlans; week++) {
+      for (const slot of overlapSlots) {
+        if (planCount >= maxPlans) break;
+
+        const dayName = slot.slice(0, 2);
+        const timeName = slot.slice(2);
+        const dayEnglish = dayMap[dayName];
+        const time = timeMap[timeName];
+
+        if (!dayEnglish || !time) continue;
+
+        const planDate = getNextDate(dayEnglish, week);
+        const subjectIndex = planCount % subjects.length;
+        const subject = subjects[subjectIndex];
+
+        const plan: TrainingPlan = {
+          id: this.generateId('plan'),
+          coachId,
+          studentId,
+          studentName,
+          subject: subject.key,
+          subjectName: subject.name,
+          planDate,
+          startTime: time.start,
+          endTime: time.end,
+          status: 'scheduled',
+        };
+
+        plans.push(plan);
+        planCount++;
+      }
+    }
+
+    return plans;
+  }
+
+  addTrainingPlans(plans: TrainingPlan[]): void {
+    this.trainingPlans.push(...plans);
+  }
 }
 
 export const db = new Database();

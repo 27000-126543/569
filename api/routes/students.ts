@@ -60,11 +60,20 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
       coach.currentStudents += 1;
     }
 
+    const trainingPlans = db.generateTrainingPlans(
+      studentId,
+      name,
+      matchedCoach.id,
+      availableSlots,
+      matchedCoach.availableSlots || []
+    );
+    db.addTrainingPlans(trainingPlans);
+
     db.addMessage({
       userId,
       type: 'system',
       title: '报名成功通知',
-      content: `恭喜您成功报名${licenseType}驾驶证培训！系统已为您匹配${db.users.find(u => u.id === matchedCoach.id)?.name || '教练'}，请按时参加培训。`,
+      content: `恭喜您成功报名${licenseType}驾驶证培训！系统已为您匹配${db.users.find(u => u.id === matchedCoach.id)?.name || '教练'}，并为您安排了${trainingPlans.length}节初始培训课程，请按时参加培训。`,
       relatedId: studentId,
       relatedType: 'registration',
       hasAttachment: true,
@@ -84,6 +93,7 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
       student: newStudent,
       user: newUser,
       matchedCoach,
+      trainingPlans,
       message: '报名成功！',
     });
   } catch (error) {

@@ -33,6 +33,7 @@ export default function StudentRegister() {
   const [step, setStep] = useState<Step>(1);
   const [isLoading, setIsLoading] = useState(false);
   const [matchedCoach, setMatchedCoach] = useState<any>(null);
+  const [trainingPlans, setTrainingPlans] = useState<any[]>([]);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -95,6 +96,7 @@ export default function StudentRegister() {
 
       if (response.success) {
         setMatchedCoach(response.matchedCoach);
+        setTrainingPlans(response.trainingPlans || []);
       }
     } catch (error) {
       console.error('Match coach error:', error);
@@ -370,6 +372,41 @@ export default function StudentRegister() {
                         </div>
                       </div>
                     </div>
+
+                    {trainingPlans.length > 0 && (
+                      <div className="mt-6 bg-slate-50 rounded-xl p-6 text-left max-w-md mx-auto">
+                        <h4 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                          <Clock className="w-5 h-5 text-blue-600" />
+                          初始培训计划
+                          <span className="text-sm font-normal text-slate-500">
+                            （共 {trainingPlans.length} 节课）
+                          </span>
+                        </h4>
+                        <div className="space-y-2 max-h-64 overflow-y-auto">
+                          {trainingPlans.map((plan, index) => (
+                            <div
+                              key={plan.id}
+                              className="flex items-center gap-3 p-3 bg-white rounded-lg border border-slate-100"
+                            >
+                              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 text-sm font-medium">
+                                {index + 1}
+                              </div>
+                              <div className="flex-1">
+                                <p className="font-medium text-slate-800 text-sm">
+                                  {plan.subjectName}
+                                </p>
+                                <p className="text-xs text-slate-500">
+                                  {plan.planDate} {plan.startTime}-{plan.endTime}
+                                </p>
+                              </div>
+                              <span className="px-2 py-1 text-xs bg-emerald-100 text-emerald-700 rounded-full">
+                                已安排
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <div className="text-rose-600">

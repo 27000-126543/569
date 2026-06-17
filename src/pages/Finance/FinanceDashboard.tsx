@@ -11,9 +11,10 @@ import {
   Check,
   X,
   Eye,
+  RefreshCw,
 } from 'lucide-react';
 import api from '../../utils/api';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import type { RefundRequest } from '../../../shared/types';
 import {
   LineChart,
@@ -36,14 +37,20 @@ const revenueData = [
 ];
 
 export default function FinanceDashboard() {
+  const navigate = useNavigate();
   const [pendingRefunds, setPendingRefunds] = useState<RefundRequest[]>([]);
   const [allRefunds, setAllRefunds] = useState<RefundRequest[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [selectedRefund, setSelectedRefund] = useState<RefundRequest | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
 
   useEffect(() => {
     fetchRefunds();
   }, []);
 
   const fetchRefunds = async () => {
+    setIsLoading(true);
     try {
       const response = await api.get<any>('/refunds');
       if (response.success) {
@@ -54,6 +61,49 @@ export default function FinanceDashboard() {
       }
     } catch (error) {
       console.error('Fetch refunds error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleApprove = async (id: string) => {
+    if (!confirm('确定要通过该退费申请吗？')) return;
+
+    try {
+      const response = await api.put<any>(`/refunds/${id}/approve`, {});
+      if (response.success) {
+        fetchRefunds();
+        alert('退费审批已通过！');
+      }
+    } catch (error) {
+      console.error('Approve refund error:', error);
+      alert('审批失败，请重试');
+    }
+  };
+
+  const handleRejectClick = (refund: RefundRequest) => {
+    setSelectedRefund(refund);
+    setRejectReason('');
+    setRejectModalOpen(true);
+  };
+
+  const handleRejectConfirm = async () => {
+    if (!selectedRefund || !rejectReason.trim()) return;
+
+    try {
+      const response = await api.put<any>(`/refunds/${selectedRefund.id}/reject`, {
+        rejectReason,
+      });
+      if (response.success) {
+        setRejectModalOpen(false);
+        setSelectedRefund(null);
+        setRejectReason('');
+        fetchRefunds();
+        alert('已拒绝退费申请');
+      }
+    } catch (error) {
+      console.error('Reject refund error:', error);
+      alert('操作失败，请重试');
     }
   };
 
@@ -140,16 +190,25 @@ export default function FinanceDashboard() {
                 <FileCheck className="w-5 h-5 text-amber-500" />
                 待审批退费
               </h3>
-              <Link
-                to="/finance/refunds"
-                className="text-sm text-blue-600 hover:text-blue-700"
-              >
-                全部 →
-              </Link>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={fetchRefunds}
+                  className="p-1 text-slate-400 hover:text-slate-600"
+                  title="刷新"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                </button>
+                <Link
+                  to="/finance/refunds"
+                  className="text-sm text-blue-600 hover:text-blue-700"
+                >
+                  全部 →
+                </Link>
+              </div>
             </div>
 
             {pendingRefunds.length > 0 ? (
-              <div className="space-y-3">
+              <div className="space-y-3 max-h-80 overflow-y-auto">
                 {pendingRefunds.slice(0, 3).map((request) => (
                   <div
                     key={request.id}
@@ -168,12 +227,14 @@ export default function FinanceDashboard() {
                     </p>
                     <div className="flex gap-2 mt-3">
                       <button
+                        onClick={() => handleApprove(request.id)}
                         className="flex-1 py-1.5 bg-emerald-600 text-white text-sm rounded hover:bg-emerald-700 flex items-center justify-center gap-1"
                       >
                         <Check className="w-4 h-4" />
                         通过
                       </button>
                       <button
+                        onClick={() => handleRejectClick(request)}
                         className="flex-1 py-1.5 bg-rose-100 text-rose-600 text-sm rounded hover:bg-rose-200 flex items-center justify-center gap-1"
                       >
                         <X className="w-4 h-4" />
@@ -236,6 +297,49 @@ export default function FinanceDashboard() {
           </div>
         </div>
       </div>
+
+      {rejectModalOpen && selectedRefund && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full mx-4 animate-fade-in">
+            <h3 className="text-xl font-bold text-slate-800 mb-2">拒绝退费申请</h3>
+            <p className="text-slate-600 mb-4">
+              学员 <strong>{selectedRefund.studentName}</strong> 的退费申请
+            </p>
+            <p className="text-rose-600 font-semibold mb-4">
+              退款金额：¥{selectedRefund.refundAmount.toLocaleString()}
+            </p>
+            <p className="text-sm text-slate-500 mb-3">
+              请填写拒绝原因（系统将通知学员）：
+            </p>
+            <textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="请输入拒绝原因..."
+              rows={4}
+              className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent resize-none"
+            />
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setRejectModalOpen(false);
+                  setSelectedRefund(null);
+                  setRejectReason('');
+                }}
+                className="flex-1 py-3 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleRejectConfirm}
+                disabled={!rejectReason.trim()}
+                className="flex-1 py-3 bg-rose-600 text-white rounded-lg hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                确认拒绝
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }
